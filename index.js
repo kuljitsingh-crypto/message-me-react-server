@@ -22,6 +22,7 @@ io.on('connection',(socket)=>{
     socket.on("userSignIn",(data)=>{
         users[data.uid]=socket.id;
     })
+
     socket.on("friend-online",(data)=>{
         let userId=users[data.id];
         if(userId===undefined || userId===null){
@@ -34,28 +35,32 @@ io.on('connection',(socket)=>{
     socket.on("message",(data)=>{
         let recevierId=data.to;
         let recevierSocketId=users[recevierId];
-        let senderId=data.from;
-        let senderSocketId=users[senderId];
-        io.to(senderSocketId).emit("message-sent",data);
-        io.to(recevierSocketId).emit("private-message",data); 
+        if(recevierSocketId!==undefined && recevierSocketId !==null){
+            let senderId=data.from;
+            let senderSocketId=users[senderId];
+            io.to(senderSocketId).emit("message-sent",data);
+            io.to(recevierSocketId).emit("private-message",data); 
+        }
+        
     })
     socket.on("receive-msg",(data)=>{
+
         let senderId=data.to;
         let senderSocketId=users[senderId];
-        io.to(senderSocketId).emit("receive-private-msg",data);
+        (senderSocketId!==undefined && senderSocketId!==null) && io.to(senderSocketId).emit("receive-private-msg",data);
     })
     
     socket.on("disconnect",()=>{
         for(const id in users){
             if(users[id]===socket.id){
-                users[id]=null
+                delete users[id];
             }
         }
         io.emit("friendSignOut",users)
     })
     socket.on("group-msg",(data)=>{
         data.to.forEach((recevierId)=>{
-            if(users[recevierId]!==undefined){
+            if(users[recevierId]!==undefined && users[recevierId]!==null){
                 let recevierSocketId=users[recevierId]
                 io.to(recevierSocketId).emit("private-group-msg",{from:data.from,msgId:data.msgId,msgs:data.msgs,msgrName:data.msgrName,
                                                 msgTime:data.msgTime,photoURL:data.photoURL,to:recevierId,grpId:data.grpId,isImg:data.isImg,
@@ -67,7 +72,7 @@ io.on('connection',(socket)=>{
     })
     socket.on("receive-private-group-msg",(data)=>{
         let senderSocketId=users[data.id]
-        if(senderSocketId!==null || senderSocketId!==undefined){
+        if(senderSocketId!==null && senderSocketId!==undefined){
             io.to(senderSocketId).emit("group-msg-receive",data);
         }
     })
