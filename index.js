@@ -12,7 +12,7 @@ const app=express();
 const server=http.createServer(app);
 const io=socketio(server,{
     cors:{
-        origin:["https://messagme.netlify.app"],
+        origin:["https://messagmee.netlify.app"],
         methods: ["GET", "POST"]
         
     }
