@@ -6,88 +6,108 @@ const socketio=require("socket.io");
 const PORT=process.env.PORT || 5000;
 const users={}
 const router=require("./router");
+const {encryptMsg,decryptMsg}=require('./encrypt');
 
 
 const app=express();
 const server=http.createServer(app);
 const io=socketio(server,{
     cors:{
-        origin:["https://messagmee.netlify.app"],
+        origin:["https://messagmee.netlify.app","http://localhost:3000"],
         methods: ["GET", "POST"]
         
     }
 });
 
 io.on('connection',(socket)=>{
-    socket.on("userSignIn",(data)=>{
+    socket.on("userSignIn",(incomingData)=>{
+        let data=JSON.parse(decryptMsg(incomingData))
         users[data.uid]=socket.id;
     })
 
-    socket.on("friend-online",(data)=>{
-        let userId=users[data.id];
-        if(userId===undefined || userId===null){
-            socket.emit("friend-online-res",{status:false})
-        }
-        else{
-            socket.emit("friend-online-res",{status:true})
-        }
-    })
-    socket.on("message",(data)=>{
-        let recevierId=data.to;
-        let recevierSocketId=users[recevierId];
-        if(recevierSocketId!==undefined && recevierSocketId !==null){
-            let senderId=data.from;
-            let senderSocketId=users[senderId];
-            io.to(senderSocketId).emit("message-sent",data);
-            io.to(recevierSocketId).emit("private-message",data); 
-        }
-        
-    })
-    socket.on("receive-msg",(data)=>{
-
-        let senderId=data.to;
-        let senderSocketId=users[senderId];
-        (senderSocketId!==undefined && senderSocketId!==null) && io.to(senderSocketId).emit("receive-private-msg",data);
-    })
-    
     socket.on("disconnect",()=>{
         for(const id in users){
             if(users[id]===socket.id){
                 delete users[id];
             }
         }
-        io.emit("friendSignOut",users)
+        io.emit("friendSignOut",encryptMsg(JSON.stringify({...users})))
     })
-    socket.on("group-msg",(data)=>{
+
+    socket.on("friend-online",(incomingData)=>{
+        let data=JSON.parse(decryptMsg(incomingData))
+        let userId=users[data.id];
+        if(userId===undefined || userId===null){
+            socket.emit("friend-online-res",encryptMsg(JSON.stringify({status:false})))
+        }
+        else{
+            socket.emit("friend-online-res",encryptMsg(JSON.stringify({status:true})))
+        }
+    })
+    socket.on("message",(incomingData)=>{
+        let decryptedData=JSON.parse(decryptMsg(incomingData))
+        let data=JSON.parse(decryptMsg(decryptedData.extra));
+        let recevierId=data.to;
+        let recevierSocketId=users[recevierId];
+        if(recevierSocketId!==undefined && recevierSocketId !==null){
+            io.to(recevierSocketId).emit("private-message",incomingData); 
+        }
+        let senderId=data.from;
+        let senderSocketId=users[senderId];
+        if(senderSocketId!==undefined && senderSocketId!==null){
+            io.to(senderSocketId).emit("message-sent",encryptMsg(JSON.stringify({...data})));
+        }
+           
+    })
+    socket.on("receive-msg",(incomingData)=>{
+        let decryptedData=JSON.parse(decryptMsg(incomingData))
+        let data=JSON.parse(decryptMsg(decryptedData.extra))
+        let senderId=data.to;
+        let senderSocketId=users[senderId];
+        (senderSocketId!==undefined && senderSocketId!==null) && io.to(senderSocketId).emit("receive-private-msg",incomingData);
+    })
+    
+    socket.on("group-msg",(incomingData)=>{
+        let decryptedData=JSON.parse(decryptMsg(incomingData))
+        let data=JSON.parse(decryptMsg(decryptedData.extra));
         data.to.forEach((recevierId)=>{
             if(users[recevierId]!==undefined && users[recevierId]!==null){
                 let recevierSocketId=users[recevierId]
-                io.to(recevierSocketId).emit("private-group-msg",{from:data.from,msgId:data.msgId,msgs:data.msgs,msgrName:data.msgrName,
-                                                msgTime:data.msgTime,photoURL:data.photoURL,to:recevierId,grpId:data.grpId,isImg:data.isImg,
-                                            imgUrl:data.imgUrl})
+                io.to(recevierSocketId).emit("private-group-msg",incomingData)
             }
         })
         let senderSocketId=users[data.from];
-        io.to(senderSocketId).emit("group-msg-sent",{status:true,id:data.msgId})
+        if(senderSocketId!==undefined && senderSocketId!==null){
+            io.to(senderSocketId).emit("group-msg-sent",encryptMsg(JSON.stringify({status:true,...data})))
+        }
+        
     })
-    socket.on("receive-private-group-msg",(data)=>{
+    
+    socket.on("receive-private-group-msg",(incomingData)=>{
+        let decryptedData=JSON.parse(decryptMsg(incomingData))
+        let data=JSON.parse(decryptMsg(decryptedData.extra));
         let senderSocketId=users[data.id]
         if(senderSocketId!==null && senderSocketId!==undefined){
-            io.to(senderSocketId).emit("group-msg-receive",data);
+            io.to(senderSocketId).emit("group-msg-receive",incomingData);
         }
     })
-    socket.on("new-group",(data)=>{
+    socket.on("new-group",(incomingData)=>{
+        let decryptedData=JSON.parse(decryptMsg(incomingData))
+        let data=JSON.parse(decryptMsg(decryptedData.extra));
         let recevierSocketId=users[data.to];
         if(recevierSocketId!==null && recevierSocketId!==undefined){
-            io.to(recevierSocketId).emit("new-group-msg",data);
+            io.to(recevierSocketId).emit("new-group-msg",incomingData);
         }
     })
-    socket.on("admin-msg",(data)=>{
+    socket.on("admin-msg",(incomingData)=>{
+        let decryptedData=JSON.parse(decryptMsg(incomingData))
+        let data=JSON.parse(decryptMsg(decryptedData.extra));
         let recevierSocketId=users[data.recevrId];
         if(recevierSocketId!==null && recevierSocketId!==undefined){
-            io.to(recevierSocketId).emit("sent-admin-msg",data);
+            io.to(recevierSocketId).emit("sent-admin-msg",incomingData);
         }
     })
+    
 })
 
 
